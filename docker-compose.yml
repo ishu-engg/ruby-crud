@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      sh -c "rails db:migrate &&
+      rails s -p 3001 -b 0.0.0.0"
+    restart: always
+    volumes:
+      - .:/app
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mysql-app
+    stdin_open: true
+    tty: true
+
+  mysql-app:
+    image: mysql:8.0
+    container_name: mysql-app
+    ports:
+      - "6002:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootapp
+      MYSQL_DATABASE: database
