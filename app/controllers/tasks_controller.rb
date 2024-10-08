@@ -1,7 +1,8 @@
 class TasksController < ApplicationController
     require 'typesense'
     skip_before_action :verify_authenticity_token
-  before_action :set_task, only: [:get_task_by_id, :update_task, :delete_task]
+    before_action :set_task, only: [:get_task_by_id, :update_task, :delete_task]
+    before_action :initialize_typesense_client, except: [:get_all_tasks, :get_task_by_id, :create_task, :update_task, :delete_task]
 
 
    # Initialize Typesense client
@@ -90,17 +91,7 @@ class TasksController < ApplicationController
   def get_all_typesense_collections
     begin
       # Retrieve all collections from Typesense
-
-      typesense_client =  Typesense::Client.new(
-        nodes: [{
-          host: 'typesense-typesense-compose.leiusn.easypanel.host', # Use the correct host here
-          port: '',
-          protocol: 'https' # Use 'http' or 'https' depending on your Typesense setup
-        }],
-        api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=', # Ensure this is the correct API key
-        connection_timeout_seconds: 5
-      )
-      collections = typesense_client.collections.retrieve
+      collections = @typesense_client.collections.retrieve
       render json: collections, status: :ok
     rescue Typesense::Error => e
       Rails.logger.error "Typesense Error: #{e.message}"
@@ -114,17 +105,17 @@ class TasksController < ApplicationController
   def check_typesense_connection
     begin
       Rails.logger.info "Attempting to connect to Typesense..."
-      client = Typesense::Client.new(
-        nodes: [{
-          host: 'typesense-typesense-compose.leiusn.easypanel.host', # Use the correct host here
-          port: '',
-          protocol: 'https' # Use 'http' or 'https' depending on your Typesense setup
-        }],
-        api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=', # Ensure this is the correct API key
-        connection_timeout_seconds: 5
-      )
+      # client = Typesense::Client.new(
+      #   nodes: [{
+      #     host: 'typesense-typesense-compose.leiusn.easypanel.host', # Use the correct host here
+      #     port: '',
+      #     protocol: 'https' # Use 'http' or 'https' depending on your Typesense setup
+      #   }],
+      #   api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=', # Ensure this is the correct API key
+      #   connection_timeout_seconds: 5
+      # )
       
-      health = client.health.retrieve
+      health = @typesense_client.health.retrieve
       Rails.logger.info "Typesense health response: #{health.inspect}"
       render json: { status: 'Connected', health: health }, status: :ok
     rescue Timeout::Error => e
@@ -151,19 +142,19 @@ class TasksController < ApplicationController
       'description' => task_params[:description]
     }
 
-    typesense_client = Typesense::Client.new(
-      nodes: [{
-        host: 'typesense-typesense-compose.leiusn.easypanel.host',
-        port: '',
-        protocol: 'https'
-      }],
-      api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
-      connection_timeout_seconds: 5
-    )
+    # typesense_client = Typesense::Client.new(
+    #   nodes: [{
+    #     host: 'typesense-typesense-compose.leiusn.easypanel.host',
+    #     port: '',
+    #     protocol: 'https'
+    #   }],
+    #   api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
+    #   connection_timeout_seconds: 5
+    # )
 
     begin
       # Insert the book into the Typesense collection
-      typesense_client.collections['tasks'].documents.create(task_data)
+      @typesense_client.collections['tasks'].documents.create(task_data)
 
       render json: { message: 'Task created successfully', task: task_data }, status: :created
     rescue Typesense::Error => e
@@ -179,15 +170,15 @@ class TasksController < ApplicationController
   def get_all_tasks_typesense
 
     collection_name = params[:collection]
-    typesense_client = Typesense::Client.new(
-      nodes: [{
-        host: 'typesense-typesense-compose.leiusn.easypanel.host',
-        port: '',
-        protocol: 'https'
-      }],
-      api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
-      connection_timeout_seconds: 5
-    )
+    # typesense_client = Typesense::Client.new(
+    #   nodes: [{
+    #     host: 'typesense-typesense-compose.leiusn.easypanel.host',
+    #     port: '',
+    #     protocol: 'https'
+    #   }],
+    #   api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
+    #   connection_timeout_seconds: 5
+    # )
 
     # Ensure a collection name is provided
     if collection_name.blank?
@@ -200,7 +191,7 @@ class TasksController < ApplicationController
         'q' => '*',  # Search for all tasks
         'query_by' => 'title,description' # Fields to search by (modify based on your schema)
       }
-      result = typesense_client.collections[collection_name].documents.search(search_params)
+      result = @typesense_client.collections[collection_name].documents.search(search_params)
       render json: result['hits'].map { |hit| hit['document'] } # Return all matching documents
     rescue StandardError => e
       render json: { error: e.message }, status: :internal_server_error
@@ -208,19 +199,19 @@ class TasksController < ApplicationController
   end
 
   def get_task
-    typesense_client = Typesense::Client.new(
-      nodes: [{
-        host: 'typesense-typesense-compose.leiusn.easypanel.host',
-        port: '',
-        protocol: 'https'
-      }],
-      api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
-      connection_timeout_seconds: 5
-    )
+    # typesense_client = Typesense::Client.new(
+    #   nodes: [{
+    #     host: 'typesense-typesense-compose.leiusn.easypanel.host',
+    #     port: '',
+    #     protocol: 'https'
+    #   }],
+    #   api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
+    #   connection_timeout_seconds: 5
+    # )
   
     begin
       # Use 'fetch' to get a specific document by ID
-      @task = typesense_client.collections['tasks'].documents[params[:id]].retrieve
+      @task = @typesense_client.collections['tasks'].documents[params[:id]].retrieve
 
       render json: @task
     rescue Typesense::Error::ObjectNotFound
@@ -232,25 +223,25 @@ class TasksController < ApplicationController
   
 
   def update_task_typesense
-    typesense_client = Typesense::Client.new(
-      nodes: [{
-        host: 'typesense-typesense-compose.leiusn.easypanel.host',
-        port: '',
-        protocol: 'https'
-      }],
-      api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
-      connection_timeout_seconds: 5
-    )
+    # typesense_client = Typesense::Client.new(
+    #   nodes: [{
+    #     host: 'typesense-typesense-compose.leiusn.easypanel.host',
+    #     port: '',
+    #     protocol: 'https'
+    #   }],
+    #   api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
+    #   connection_timeout_seconds: 5
+    # )
   
     begin
       # Retrieve the current document data
-      current_task = typesense_client.collections['tasks'].documents[params[:id]].retrieve
+      current_task = @typesense_client.collections['tasks'].documents[params[:id]].retrieve
   
       # Merge the existing data with the updated params to form a complete document
       updated_task_data = current_task.merge(task_update_params.to_h)
   
       # Update the task document by ID with the complete data
-      @task = typesense_client.collections['tasks'].documents[params[:id]].update(updated_task_data)
+      @task = @typesense_client.collections['tasks'].documents[params[:id]].update(updated_task_data)
       render json: @task
     rescue Typesense::Error::ObjectNotFound
       render json: { error: 'Task not found' }, status: :not_found
@@ -260,19 +251,19 @@ class TasksController < ApplicationController
   end
 
   def delete_task_typesense
-    typesense_client = Typesense::Client.new(
-      nodes: [{
-        host: 'typesense-typesense-compose.leiusn.easypanel.host',
-        port: '',
-        protocol: 'https'
-      }],
-      api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
-      connection_timeout_seconds: 5
-    )
+    # typesense_client = Typesense::Client.new(
+    #   nodes: [{
+    #     host: 'typesense-typesense-compose.leiusn.easypanel.host',
+    #     port: '',
+    #     protocol: 'https'
+    #   }],
+    #   api_key: 'HHc7/wIE1QFvMu8Y3V6p0Ku8Ln+ObGsFzx8KDb+n4sU=',
+    #   connection_timeout_seconds: 5
+    # )
   
     begin
       # Delete the task document by ID
-      typesense_client.collections['tasks'].documents[params[:id]].delete
+      @typesense_client.collections['tasks'].documents[params[:id]].delete
       render json: { message: 'Task deleted successfully' }, status: :ok
     rescue Typesense::Error::ObjectNotFound
       render json: { error: 'Task not found' }, status: :not_found
